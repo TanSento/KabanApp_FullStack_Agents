@@ -18,7 +18,7 @@ def test_root_serves_index_when_static_dir_exists(tmp_path):
     (static_dir / "index.html").write_text("<html><body>Kanban Studio</body></html>")
     (static_dir / "_next").mkdir()
 
-    app = create_app(static_dir=static_dir)
+    app = create_app(static_dir=static_dir, db_path=tmp_path / "test.db")
     client = TestClient(app)
 
     response = client.get("/")
@@ -33,7 +33,7 @@ def test_health_still_works_with_static_dir(tmp_path):
     (static_dir / "index.html").write_text("<html></html>")
     (static_dir / "_next").mkdir()
 
-    app = create_app(static_dir=static_dir)
+    app = create_app(static_dir=static_dir, db_path=tmp_path / "test.db")
     client = TestClient(app)
 
     response = client.get("/api/health")
@@ -49,7 +49,7 @@ def test_static_file_served_directly(tmp_path):
     (static_dir / "_next").mkdir()
     (static_dir / "favicon.ico").write_bytes(b"fake-icon")
 
-    app = create_app(static_dir=static_dir)
+    app = create_app(static_dir=static_dir, db_path=tmp_path / "test.db")
     client = TestClient(app)
 
     response = client.get("/favicon.ico")
@@ -64,7 +64,7 @@ def test_spa_fallback_to_index(tmp_path):
     (static_dir / "index.html").write_text("<html><body>SPA</body></html>")
     (static_dir / "_next").mkdir()
 
-    app = create_app(static_dir=static_dir)
+    app = create_app(static_dir=static_dir, db_path=tmp_path / "test.db")
     client = TestClient(app)
 
     response = client.get("/some/unknown/path")

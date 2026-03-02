@@ -85,10 +85,10 @@ Add a login gate: on first hitting `/`, the user must sign in with `user` / `pas
 
 Propose a database schema for the Kanban, save it as JSON. Document the approach in `docs/`.
 
-- [ ] Design SQLite schema supporting: users, boards (one per user for MVP), columns (ordered), cards (ordered within columns)
-- [ ] Save schema definition as `docs/schema.json`
-- [ ] Write `docs/DATABASE.md` explaining the schema, relationships, and migration strategy
-- [ ] Get user sign-off on the schema before implementation
+- [x] Design SQLite schema supporting: users, boards (one per user for MVP), columns (ordered), cards (ordered within columns)
+- [x] Save schema definition as `docs/schema.json`
+- [x] Write `docs/DATABASE.md` explaining the schema, relationships, and migration strategy
+- [x] Get user sign-off on the schema before implementation
 
 **Success criteria:** Schema is documented, saved as JSON, and approved by user.
 
@@ -98,20 +98,20 @@ Propose a database schema for the Kanban, save it as JSON. Document the approach
 
 Add API routes for reading and modifying the Kanban board for a given user. The database is created automatically if it does not exist.
 
-- [ ] Add database initialization code: create tables on startup if they do not exist
-- [ ] Seed default board data for a user if they have no board yet
-- [ ] Add `GET /api/board` -- returns the full board (columns + cards) for the authenticated user
-- [ ] Add `PUT /api/board/columns/{id}` -- rename a column
-- [ ] Add `POST /api/board/cards` -- create a new card in a column
-- [ ] Add `PUT /api/board/cards/{id}` -- edit a card (title, details)
-- [ ] Add `DELETE /api/board/cards/{id}` -- delete a card
-- [ ] Add `PUT /api/board/cards/{id}/move` -- move a card to a different column/position
-- [ ] Add `PUT /api/board` -- bulk update (for AI-driven batch changes)
+- [x] Add database initialization code: create tables on startup if they do not exist
+- [x] Seed default board data for a user if they have no board yet
+- [x] Add `GET /api/board` -- returns the full board (columns + cards) for the authenticated user
+- [x] Add `PUT /api/board/columns/{id}` -- rename a column
+- [x] Add `POST /api/board/cards` -- create a new card in a column
+- [x] Add `PUT /api/board/cards/{id}` -- edit a card (title, details)
+- [x] Add `DELETE /api/board/cards/{id}` -- delete a card
+- [x] Add `PUT /api/board/cards/{id}/move` -- move a card to a different column/position
+- [x] Add `PUT /api/board` -- bulk update (for AI-driven batch changes)
 
 **Tests:**
-- [ ] `pytest` for each endpoint: CRUD operations, edge cases (missing card, duplicate move, empty title)
-- [ ] `pytest` for database auto-creation: start with no DB file, call an endpoint, verify DB is created
-- [ ] `pytest` for auth enforcement: all board routes require authentication
+- [x] `pytest` for each endpoint: CRUD operations, edge cases (missing card, duplicate move, empty title)
+- [x] `pytest` for database auto-creation: start with no DB file, call an endpoint, verify DB is created
+- [x] `pytest` for auth enforcement: all board routes require authentication
 
 **Success criteria:** All CRUD operations work via API. Database is created on first use. All tests pass.
 

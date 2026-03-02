@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -14,11 +14,14 @@ import {
 import { useAuth } from "@/components/AuthContext";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { api } from "@/lib/api";
 
 export const KanbanBoard = () => {
-  const { username, logout } = useAuth();
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+  const { token, username, logout } = useAuth();
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -27,7 +30,24 @@ export const KanbanBoard = () => {
     })
   );
 
-  const cardsById = useMemo(() => board.cards, [board.cards]);
+  const fetchBoard = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await api.getBoard(token);
+      setBoard(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load board");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchBoard();
+  }, [fetchBoard]);
+
+  const cardsById = useMemo(() => board?.cards ?? {}, [board?.cards]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
@@ -37,61 +57,120 @@ export const KanbanBoard = () => {
     const { active, over } = event;
     setActiveCardId(null);
 
-    if (!over || active.id === over.id) {
-      return;
-    }
+    if (!over || active.id === over.id || !board || !token) return;
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
+    const updatedColumns = moveCard(
+      board.columns,
+      active.id as string,
+      over.id as string
+    );
+
+    // Optimistic update
+    setBoard((prev) => (prev ? { ...prev, columns: updatedColumns } : prev));
+
+    // Find which column the card ended up in and its position
+    const targetCol = updatedColumns.find((col) =>
+      col.cardIds.includes(active.id as string)
+    );
+    if (targetCol) {
+      const position = targetCol.cardIds.indexOf(active.id as string);
+      api
+        .moveCard(token, active.id as string, targetCol.id, position)
+        .catch(() => fetchBoard()); // revert on failure
+    }
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
-      ...prev,
-      columns: prev.columns.map((column) =>
-        column.id === columnId ? { ...column, title } : column
-      ),
-    }));
+    if (!token || !board) return;
+
+    // Optimistic update
+    setBoard((prev) =>
+      prev
+        ? {
+          ...prev,
+          columns: prev.columns.map((col) =>
+            col.id === columnId ? { ...col, title } : col
+          ),
+        }
+        : prev
+    );
+
+    api.renameColumn(token, columnId, title).catch(() => fetchBoard());
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
+    if (!token || !board) return;
     const id = createId("card");
-    setBoard((prev) => ({
-      ...prev,
-      cards: {
-        ...prev.cards,
-        [id]: { id, title, details: details || "No details yet." },
-      },
-      columns: prev.columns.map((column) =>
-        column.id === columnId
-          ? { ...column, cardIds: [...column.cardIds, id] }
-          : column
-      ),
-    }));
+    const cardDetails = details || "No details yet.";
+
+    // Optimistic update
+    setBoard((prev) =>
+      prev
+        ? {
+          ...prev,
+          cards: { ...prev.cards, [id]: { id, title, details: cardDetails } },
+          columns: prev.columns.map((col) =>
+            col.id === columnId
+              ? { ...col, cardIds: [...col.cardIds, id] }
+              : col
+          ),
+        }
+        : prev
+    );
+
+    api
+      .createCard(token, columnId, id, title, cardDetails)
+      .catch(() => fetchBoard());
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
-      return {
-        ...prev,
-        cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? {
-              ...column,
-              cardIds: column.cardIds.filter((id) => id !== cardId),
-            }
-            : column
-        ),
-      };
-    });
+    if (!token || !board) return;
+
+    // Optimistic update
+    setBoard((prev) =>
+      prev
+        ? {
+          ...prev,
+          cards: Object.fromEntries(
+            Object.entries(prev.cards).filter(([id]) => id !== cardId)
+          ),
+          columns: prev.columns.map((col) =>
+            col.id === columnId
+              ? { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) }
+              : col
+          ),
+        }
+        : prev
+    );
+
+    api.deleteCard(token, cardId).catch(() => fetchBoard());
   };
 
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-[var(--gray-text)]">Loading board...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="text-sm text-red-600" role="alert">{error}</p>
+        <button
+          onClick={fetchBoard}
+          className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:border-[var(--primary-blue)] hover:text-[var(--navy-dark)]"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!board) return null;
 
   return (
     <div className="relative overflow-hidden">

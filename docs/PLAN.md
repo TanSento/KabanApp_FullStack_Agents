@@ -121,17 +121,17 @@ Add API routes for reading and modifying the Kanban board for a given user. The 
 
 Connect the frontend to the backend API so the Kanban board is fully persistent.
 
-- [ ] Replace local `useState` board state with API calls: fetch board on mount, update via API on every user action
-- [ ] Add an API client module in the frontend (`lib/api.ts`) with typed fetch wrappers
-- [ ] Update `KanbanBoard` to load data from `GET /api/board`
-- [ ] Update column rename, card add, card edit, card delete, card move handlers to call the respective API endpoints
-- [ ] Show loading and error states
-- [ ] Ensure optimistic updates or proper refetching for a smooth UX
+- [x] Replace local `useState` board state with API calls: fetch board on mount, update via API on every user action
+- [x] Add an API client module in the frontend (`lib/api.ts`) with typed fetch wrappers
+- [x] Update `KanbanBoard` to load data from `GET /api/board`
+- [x] Update column rename, card add, card edit, card delete, card move handlers to call the respective API endpoints
+- [x] Show loading and error states
+- [x] Ensure optimistic updates or proper refetching for a smooth UX
 
 **Tests:**
-- [ ] Frontend unit tests with mocked API responses: board loads, CRUD operations trigger correct API calls
-- [ ] Integration tests (Playwright): full user flow -- login, see board, add card, rename column, drag card, delete card, refresh and verify persistence
-- [ ] `pytest`: end-to-end flow via API -- login, get board, modify, get board again, verify changes persisted
+- [x] Frontend unit tests with mocked API responses: board loads, CRUD operations trigger correct API calls
+- [x] Integration tests (Playwright): full user flow -- login, see board, add card, rename column, drag card, delete card, refresh and verify persistence
+- [x] `pytest`: end-to-end flow via API -- login, get board, modify, get board again, verify changes persisted
 
 **Success criteria:** All changes persist across page refreshes. Frontend and backend work together seamlessly. All tests pass.
 

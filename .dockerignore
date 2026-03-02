@@ -3,11 +3,10 @@
 .env
 __pycache__
 *.pyc
-node_modules
+frontend/node_modules
 frontend/.next
 frontend/test-results
 docs
 scripts
-*.md
 .agent
 .gemini

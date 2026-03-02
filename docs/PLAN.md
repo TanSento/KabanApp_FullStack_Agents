@@ -37,17 +37,17 @@ Set up Docker infrastructure, FastAPI backend in `backend/`, and start/stop scri
 
 Update so the frontend is statically built inside Docker and served by FastAPI at `/`. The demo Kanban board displays correctly.
 
-- [ ] Add `output: "export"` to `next.config.ts` so `next build` produces a static `out/` directory
-- [ ] Update `Dockerfile` to add a Node build stage: install deps, run `next build`, copy `out/` into the Python image
-- [ ] Update FastAPI to mount the `out/` directory as static files at `/`
-- [ ] Remove the temporary hello-world route
-- [ ] Ensure Tailwind, fonts, and all assets load correctly from the static build
+- [x] Add `output: "export"` to `next.config.ts` so `next build` produces a static `out/` directory
+- [x] Update `Dockerfile` to add a Node build stage: install deps, run `next build`, copy `out/` into the Python image
+- [x] Update FastAPI to mount the `out/` directory as static files at `/`
+- [x] Remove the temporary hello-world route
+- [x] Ensure Tailwind, fonts, and all assets load correctly from the static build
 
 **Tests:**
-- [ ] `pytest` unit test: `GET /` returns 200 with HTML containing "Kanban Studio"
-- [ ] `pytest` unit test: `GET /api/health` still returns 200
-- [ ] Frontend unit tests still pass inside the container: `npm run test:unit`
-- [ ] Manual: rebuild and run Docker, open `http://localhost:8000`, confirm full Kanban board renders with drag-and-drop, column rename, card add/delete
+- [x] `pytest` unit test: `GET /` returns 200 with HTML containing "Kanban Studio"
+- [x] `pytest` unit test: `GET /api/health` still returns 200
+- [x] Frontend unit tests still pass inside the container: `npm run test:unit`
+- [x] Manual: rebuild and run Docker, open `http://localhost:8000`, confirm full Kanban board renders with drag-and-drop, column rename, card add/delete
 
 **Success criteria:** Full Kanban board renders at `/` when served from Docker. All existing tests pass.
 

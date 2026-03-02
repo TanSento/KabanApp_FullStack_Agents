@@ -57,25 +57,25 @@ Update so the frontend is statically built inside Docker and served by FastAPI a
 
 Add a login gate: on first hitting `/`, the user must sign in with `user` / `password` to see the Kanban board. Add logout capability.
 
-- [ ] Add a `POST /api/auth/login` endpoint: accepts `{username, password}`, returns a session token (simple JWT or UUID stored server-side)
-- [ ] Add a `POST /api/auth/logout` endpoint: invalidates the session
-- [ ] Add a `GET /api/auth/me` endpoint: returns current user info if authenticated, else 401
-- [ ] Add auth middleware or dependency in FastAPI to protect `/api/*` routes (except login)
-- [ ] Add a `LoginPage` component in the frontend
-- [ ] Add an `AuthContext` provider in the frontend to manage token state (stored in memory or sessionStorage)
-- [ ] Gate the Kanban board behind authentication: if not logged in, show the login page; if logged in, show the board with a logout button
-- [ ] Rebuild static frontend; update Docker setup if needed
+- [x] Add a `POST /api/auth/login` endpoint: accepts `{username, password}`, returns a session token (simple JWT or UUID stored server-side)
+- [x] Add a `POST /api/auth/logout` endpoint: invalidates the session
+- [x] Add a `GET /api/auth/me` endpoint: returns current user info if authenticated, else 401
+- [x] Add auth middleware or dependency in FastAPI to protect `/api/*` routes (except login)
+- [x] Add a `LoginPage` component in the frontend
+- [x] Add an `AuthContext` provider in the frontend to manage token state (stored in memory or sessionStorage)
+- [x] Gate the Kanban board behind authentication: if not logged in, show the login page; if logged in, show the board with a logout button
+- [x] Rebuild static frontend; update Docker setup if needed
 
 **Tests:**
-- [ ] `pytest`: login with correct credentials returns 200 + token
-- [ ] `pytest`: login with wrong credentials returns 401
-- [ ] `pytest`: accessing protected route without token returns 401
-- [ ] `pytest`: accessing protected route with valid token returns 200
-- [ ] `pytest`: logout invalidates token
-- [ ] Frontend unit test: `LoginPage` renders form, submits credentials, shows error on failure
-- [ ] Frontend unit test: `AuthContext` stores/clears token correctly
-- [ ] Frontend unit test: unauthenticated state shows login page, authenticated state shows board
-- [ ] Manual: open app, see login page, enter wrong password (see error), enter correct credentials (see board), refresh (still logged in or re-prompted), click logout (return to login)
+- [x] `pytest`: login with correct credentials returns 200 + token
+- [x] `pytest`: login with wrong credentials returns 401
+- [x] `pytest`: accessing protected route without token returns 401
+- [x] `pytest`: accessing protected route with valid token returns 200
+- [x] `pytest`: logout invalidates token
+- [x] Frontend unit test: `LoginPage` renders form, submits credentials, shows error on failure
+- [x] Frontend unit test: `AuthContext` stores/clears token correctly
+- [x] Frontend unit test: unauthenticated state shows login page, authenticated state shows board
+- [x] Manual: open app, see login page, enter wrong password (see error), enter correct credentials (see board), refresh (still logged in or re-prompted), click logout (return to login)
 
 **Success criteria:** The app requires login before showing the Kanban board. Logout works. All tests pass.
 

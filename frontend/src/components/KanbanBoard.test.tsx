@@ -1,13 +1,43 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import * as AuthContext from "@/components/AuthContext";
+import { vi } from "vitest";
+
+const mockAuth = {
+  token: "test-token",
+  username: "user",
+  isLoading: false,
+  error: null,
+  login: vi.fn(),
+  logout: vi.fn(),
+};
+
+vi.spyOn(AuthContext, "useAuth").mockReturnValue(mockAuth);
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
 
 describe("KanbanBoard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(AuthContext, "useAuth").mockReturnValue(mockAuth);
+  });
+
   it("renders five columns", () => {
     render(<KanbanBoard />);
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+  });
+
+  it("shows the username and sign out button", () => {
+    render(<KanbanBoard />);
+    expect(screen.getByText("user")).toBeInTheDocument();
+    expect(screen.getByTestId("logout-button")).toBeInTheDocument();
+  });
+
+  it("calls logout when sign out is clicked", async () => {
+    render(<KanbanBoard />);
+    await userEvent.click(screen.getByTestId("logout-button"));
+    expect(mockAuth.logout).toHaveBeenCalled();
   });
 
   it("renames a column", async () => {

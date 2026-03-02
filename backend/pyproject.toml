@@ -1,0 +1,16 @@
+[project]
+name = "pm-backend"
+version = "0.1.0"
+description = "Project Management Kanban backend"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-dotenv>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.28.0",
+]

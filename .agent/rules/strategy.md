@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # The Project Management MVP web app
 
 ## Business Requirements

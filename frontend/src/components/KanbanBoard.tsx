@@ -7,7 +7,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -29,6 +31,14 @@ export const KanbanBoard = () => {
       activationConstraint: { distance: 6 },
     })
   );
+
+  // Use pointerWithin first (handles empty columns and bottom-of-list drops),
+  // fall back to closestCenter for fine-grained card-to-card sorting.
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const pw = pointerWithin(args);
+    if (pw.length > 0) return pw;
+    return closestCenter(args);
+  }, []);
 
   const fetchBoard = useCallback(async () => {
     if (!token) return;
@@ -231,7 +241,7 @@ export const KanbanBoard = () => {
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collisionDetection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >

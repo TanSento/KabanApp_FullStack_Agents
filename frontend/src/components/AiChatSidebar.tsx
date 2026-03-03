@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 
 type Message = {
@@ -160,11 +161,17 @@ export const AiChatSidebar = ({ token, onBoardUpdate }: AiChatSidebarProps) => {
                             <div
                                 data-testid={`chat-message-${msg.role}`}
                                 className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${msg.role === "user"
-                                        ? "bg-[var(--secondary-purple)] text-white"
-                                        : "border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]"
+                                    ? "bg-[var(--secondary-purple)] text-white"
+                                    : "border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]"
                                     }`}
                             >
-                                {msg.content}
+                                {msg.role === "assistant" ? (
+                                    <div className="chat-markdown">
+                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    </div>
+                                ) : (
+                                    msg.content
+                                )}
                             </div>
                         </div>
                     ))}

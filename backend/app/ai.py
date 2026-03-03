@@ -22,6 +22,8 @@ Available actions (use in board_updates):
 - move_card: requires card_id, column_id (target), position (0-indexed)
 - rename_column: requires column_id, title
 
+IMPORTANT: In your "response" text, never show internal IDs like card-xxx or col-xxx. Refer to cards and columns by their titles only. Keep responses concise and friendly.
+
 Always respond with valid JSON in this exact format:
 {{"response": "your text response to the user", "board_updates": [...]}}
 

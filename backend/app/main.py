@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.ai import AINotConfiguredError, AIServiceError, chat
 from app.auth import get_user, login, logout
 from app.db import (
     bulk_update,
@@ -130,6 +131,18 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
         return UserResponse(username=user)
+
+    # -- AI --
+
+    @application.post("/api/ai/test")
+    async def ai_test(username: str = Depends(require_auth)):
+        try:
+            answer = chat([{"role": "user", "content": "What is 2+2?"}])
+            return {"response": answer}
+        except AINotConfiguredError:
+            raise HTTPException(status_code=503, detail="AI service not configured")
+        except AIServiceError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
 
     # -- Board CRUD --
 

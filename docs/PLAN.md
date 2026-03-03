@@ -141,12 +141,12 @@ Connect the frontend to the backend API so the Kanban board is fully persistent.
 
 Allow the backend to make AI calls via OpenRouter. Verify with a simple "2+2" test.
 
-- [ ] Add OpenRouter client module in backend (`app/ai.py`): reads `OPENROUTER_API_KEY` from env, calls `openai/gpt-oss-120b` via the OpenAI-compatible API
-- [ ] Add `POST /api/ai/test` endpoint: sends "What is 2+2?" to the model, returns the response
-- [ ] Handle errors gracefully (missing API key, rate limits, timeouts)
+- [x] Add OpenRouter client module in backend (`app/ai.py`): reads `OPENROUTER_API_KEY` from env, calls `openai/gpt-oss-120b` via the OpenAI-compatible API
+- [x] Add `POST /api/ai/test` endpoint: sends "What is 2+2?" to the model, returns the response
+- [x] Handle errors gracefully (missing API key, rate limits, timeouts)
 
 **Tests:**
-- [ ] `pytest`: mock the OpenRouter call, verify request format and response parsing
+- [x] `pytest`: mock the OpenRouter call, verify request format and response parsing
 - [ ] Manual/integration: with a real API key, call `/api/ai/test` and confirm the model responds with "4"
 
 **Success criteria:** AI calls work end-to-end. Error handling is robust. Tests pass.

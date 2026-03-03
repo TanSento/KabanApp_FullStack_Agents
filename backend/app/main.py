@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.ai import AINotConfiguredError, AIServiceError, chat
+from app.ai import AINotConfiguredError, AIServiceError, chat, chat_with_board
 from app.auth import get_user, login, logout
 from app.db import (
     bulk_update,
@@ -67,6 +70,11 @@ class BulkUpdateRequest(BaseModel):
     cards: dict[str, dict]
 
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: list[dict[str, str]] = []
+
+
 # -- Auth dependency --
 
 def require_auth(authorization: str = Header()) -> str:
@@ -77,6 +85,21 @@ def require_auth(authorization: str = Header()) -> str:
     if username is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return username
+
+
+def require_auth_with_token(authorization: str = Header()) -> tuple[str, str]:
+    """Return (username, token) for endpoints that need the token."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    token = authorization.removeprefix("Bearer ")
+    username = get_user(token)
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return username, token
+
+
+# In-memory conversation history: token -> [{role, content}]
+_chat_history: dict[str, list[dict[str, str]]] = {}
 
 
 def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> FastAPI:
@@ -143,6 +166,49 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             raise HTTPException(status_code=503, detail="AI service not configured")
         except AIServiceError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
+
+    @application.post("/api/ai/chat")
+    async def ai_chat(body: ChatRequest, auth: tuple[str, str] = Depends(require_auth_with_token)):
+        username, token = auth
+        conn, board_id = _get_board_id(username)
+        try:
+            board_state = get_board(conn, board_id)
+            history = _chat_history.get(token, [])
+
+            try:
+                result = chat_with_board(board_state, body.message, history)
+            except AINotConfiguredError:
+                raise HTTPException(status_code=503, detail="AI service not configured")
+            except AIServiceError as exc:
+                raise HTTPException(status_code=502, detail=str(exc))
+
+            # Apply board updates transactionally
+            applied = []
+            try:
+                for action in result.board_updates:
+                    if action.action == "create_card":
+                        create_card(conn, board_id, action.column_id, action.card_id, action.title, action.details or "")
+                    elif action.action == "edit_card":
+                        update_card(conn, board_id, action.card_id, action.title, action.details or "")
+                    elif action.action == "delete_card":
+                        delete_card(conn, board_id, action.card_id)
+                    elif action.action == "move_card":
+                        move_card(conn, board_id, action.card_id, action.column_id, action.position)
+                    elif action.action == "rename_column":
+                        rename_column(conn, board_id, action.column_id, action.title)
+                    applied.append(action.model_dump(exclude_none=True))
+            except Exception:
+                conn.rollback()
+                raise
+
+            # Update conversation history
+            history.append({"role": "user", "content": body.message})
+            history.append({"role": "assistant", "content": result.response})
+            _chat_history[token] = history
+
+            return {"response": result.response, "board_updates": applied}
+        finally:
+            conn.close()
 
     # -- Board CRUD --
 

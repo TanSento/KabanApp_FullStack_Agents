@@ -147,7 +147,7 @@ Allow the backend to make AI calls via OpenRouter. Verify with a simple "2+2" te
 
 **Tests:**
 - [x] `pytest`: mock the OpenRouter call, verify request format and response parsing
-- [ ] Manual/integration: with a real API key, call `/api/ai/test` and confirm the model responds with "4"
+- [x] Manual/integration: with a real API key, call `/api/ai/test` and confirm the model responds with "4"
 
 **Success criteria:** AI calls work end-to-end. Error handling is robust. Tests pass.
 
@@ -157,17 +157,17 @@ Allow the backend to make AI calls via OpenRouter. Verify with a simple "2+2" te
 
 Extend the AI call so it always receives the board JSON + user question + conversation history. The AI returns structured outputs including a response and optional board updates.
 
-- [ ] Define a Pydantic model for the AI structured output: `{response: str, board_updates: Optional[...]}`
-- [ ] Board updates should support: create card, edit card, delete card, move card, rename column
-- [ ] Add `POST /api/ai/chat` endpoint: accepts `{message, conversation_history}`, sends board state + message to AI, parses structured output, applies board updates if any, returns response
-- [ ] Apply board updates transactionally (all-or-nothing)
-- [ ] Store conversation history per session
+- [x] Define a Pydantic model for the AI structured output: `{response: str, board_updates: Optional[...]}`
+- [x] Board updates should support: create card, edit card, delete card, move card, rename column
+- [x] Add `POST /api/ai/chat` endpoint: accepts `{message, conversation_history}`, sends board state + message to AI, parses structured output, applies board updates if any, returns response
+- [x] Apply board updates transactionally (all-or-nothing)
+- [x] Store conversation history per session
 
 **Tests:**
-- [ ] `pytest` with mocked AI: verify structured output parsing for various scenarios (response only, response + card creation, response + multiple updates)
-- [ ] `pytest`: verify board updates are applied correctly to the database
-- [ ] `pytest`: verify invalid structured outputs are handled gracefully
-- [ ] Integration: send a real chat message like "Add a card called Testing to the Backlog column", verify the card appears
+- [x] `pytest` with mocked AI: verify structured output parsing for various scenarios (response only, response + card creation, response + multiple updates)
+- [x] `pytest`: verify board updates are applied correctly to the database
+- [x] `pytest`: verify invalid structured outputs are handled gracefully
+- [x] Integration: send a real chat message like "Add a card called Testing to the Backlog column", verify the card appears
 
 **Success criteria:** AI receives full board context. Structured outputs correctly update the board. Conversation history is maintained. All tests pass.
 

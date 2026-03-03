@@ -22,8 +22,19 @@ async function request<T>(
     return res.json();
 }
 
+export type ChatResponse = {
+    response: string;
+    board_updates: Record<string, unknown>[];
+};
+
 export const api = {
     getBoard: (token: string) => request<BoardData>("/board", token),
+
+    chatWithAi: (token: string, message: string) =>
+        request<ChatResponse>("/ai/chat", token, {
+            method: "POST",
+            body: JSON.stringify({ message }),
+        }),
 
     renameColumn: (token: string, columnId: string, title: string) =>
         request("/board/columns/" + columnId, token, {

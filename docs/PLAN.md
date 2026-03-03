@@ -177,16 +177,16 @@ Extend the AI call so it always receives the board JSON + user question + conver
 
 Add a sidebar widget to the UI for AI chat. When the AI updates the board via structured outputs, the UI refreshes automatically.
 
-- [ ] Add `AiChatSidebar` component: collapsible panel on the right side of the board
-- [ ] Chat UI: message input, scrollable message history, send button
-- [ ] On sending a message, call `POST /api/ai/chat`, display the AI response
-- [ ] If the AI response includes board updates, automatically refetch and re-render the board
-- [ ] Style the sidebar to match the app design system (color scheme, fonts, spacing)
-- [ ] Add a toggle button to open/close the sidebar
+- [x] Add `AiChatSidebar` component: collapsible panel on the right side of the board
+- [x] Chat UI: message input, scrollable message history, send button
+- [x] On sending a message, call `POST /api/ai/chat`, display the AI response
+- [x] If the AI response includes board updates, automatically refetch and re-render the board
+- [x] Style the sidebar to match the app design system (color scheme, fonts, spacing)
+- [x] Add a toggle button to open/close the sidebar
 
 **Tests:**
-- [ ] Frontend unit test: sidebar opens/closes, messages render, input submits
-- [ ] Frontend unit test with mocked API: AI response displays, board refresh triggers on updates
+- [x] Frontend unit test: sidebar opens/closes, messages render, input submits
+- [x] Frontend unit test with mocked API: AI response displays, board refresh triggers on updates
 - [ ] Playwright E2E: open sidebar, send a message, see AI response, verify board updates if applicable
 - [ ] Manual: full conversational flow -- ask AI to create cards, move cards, rename columns; verify board updates in real time
 

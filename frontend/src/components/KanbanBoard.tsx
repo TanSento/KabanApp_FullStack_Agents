@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/components/AuthContext";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
+import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { createId, moveCard, type BoardData } from "@/lib/kanban";
 import { api } from "@/lib/api";
 
@@ -265,6 +266,7 @@ export const KanbanBoard = () => {
             ) : null}
           </DragOverlay>
         </DndContext>
+        {token && <AiChatSidebar token={token} onBoardUpdate={fetchBoard} />}
       </main>
     </div>
   );

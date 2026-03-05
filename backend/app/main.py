@@ -72,7 +72,6 @@ class BulkUpdateRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    conversation_history: list[dict[str, str]] = []
 
 
 # -- Auth dependency --
@@ -143,6 +142,7 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             raise HTTPException(status_code=401, detail="Invalid authorization header")
         token = authorization.removeprefix("Bearer ")
         logout(token)
+        _chat_history.pop(token, None)
         return {"status": "ok"}
 
     @application.get("/api/auth/me")
@@ -182,21 +182,22 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             except AIServiceError as exc:
                 raise HTTPException(status_code=502, detail=str(exc))
 
-            # Apply board updates transactionally
+            # Apply board updates atomically — commit once after all actions succeed
             applied = []
             try:
                 for action in result.board_updates:
                     if action.action == "create_card":
-                        create_card(conn, board_id, action.column_id, action.card_id, action.title, action.details or "")
+                        create_card(conn, board_id, action.column_id, action.card_id, action.title, action.details or "", commit=False)
                     elif action.action == "edit_card":
-                        update_card(conn, board_id, action.card_id, action.title, action.details or "")
+                        update_card(conn, board_id, action.card_id, action.title, action.details or "", commit=False)
                     elif action.action == "delete_card":
-                        delete_card(conn, board_id, action.card_id)
+                        delete_card(conn, board_id, action.card_id, commit=False)
                     elif action.action == "move_card":
-                        move_card(conn, board_id, action.card_id, action.column_id, action.position)
+                        move_card(conn, board_id, action.card_id, action.column_id, action.position, commit=False)
                     elif action.action == "rename_column":
-                        rename_column(conn, board_id, action.column_id, action.title)
+                        rename_column(conn, board_id, action.column_id, action.title, commit=False)
                     applied.append(action.model_dump(exclude_none=True))
+                conn.commit()
             except Exception:
                 conn.rollback()
                 raise

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -26,6 +26,7 @@ export const KanbanBoard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -94,7 +95,7 @@ export const KanbanBoard = () => {
   const handleRenameColumn = (columnId: string, title: string) => {
     if (!token || !board) return;
 
-    // Optimistic update
+    // Optimistic update immediately
     setBoard((prev) =>
       prev
         ? {
@@ -106,7 +107,11 @@ export const KanbanBoard = () => {
         : prev
     );
 
-    api.renameColumn(token, columnId, title).catch(() => fetchBoard());
+    // Debounce the API call — only fire 400ms after the user stops typing
+    if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
+    renameTimerRef.current = setTimeout(() => {
+      api.renameColumn(token, columnId, title).catch(() => fetchBoard());
+    }, 400);
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {

@@ -133,16 +133,17 @@ def get_board(conn: sqlite3.Connection, board_id: int) -> dict:
     return {"columns": columns, "cards": cards}
 
 
-def rename_column(conn: sqlite3.Connection, board_id: int, column_id: str, title: str) -> bool:
+def rename_column(conn: sqlite3.Connection, board_id: int, column_id: str, title: str, commit: bool = True) -> bool:
     cur = conn.execute(
         "UPDATE columns SET title = ? WHERE id = ? AND board_id = ?",
         (title, column_id, board_id),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return cur.rowcount > 0
 
 
-def create_card(conn: sqlite3.Connection, board_id: int, column_id: str, card_id: str, title: str, details: str = "") -> bool:
+def create_card(conn: sqlite3.Connection, board_id: int, column_id: str, card_id: str, title: str, details: str = "", commit: bool = True) -> bool:
     col = conn.execute(
         "SELECT id FROM columns WHERE id = ? AND board_id = ?",
         (column_id, board_id),
@@ -157,31 +158,34 @@ def create_card(conn: sqlite3.Connection, board_id: int, column_id: str, card_id
         "INSERT INTO cards (id, column_id, title, details, position) VALUES (?, ?, ?, ?, ?)",
         (card_id, column_id, title, details, max_pos + 1),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return True
 
 
-def update_card(conn: sqlite3.Connection, board_id: int, card_id: str, title: str, details: str) -> bool:
+def update_card(conn: sqlite3.Connection, board_id: int, card_id: str, title: str, details: str, commit: bool = True) -> bool:
     cur = conn.execute(
         """UPDATE cards SET title = ?, details = ?
            WHERE id = ? AND column_id IN (SELECT id FROM columns WHERE board_id = ?)""",
         (title, details, card_id, board_id),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return cur.rowcount > 0
 
 
-def delete_card(conn: sqlite3.Connection, board_id: int, card_id: str) -> bool:
+def delete_card(conn: sqlite3.Connection, board_id: int, card_id: str, commit: bool = True) -> bool:
     cur = conn.execute(
         """DELETE FROM cards
            WHERE id = ? AND column_id IN (SELECT id FROM columns WHERE board_id = ?)""",
         (card_id, board_id),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return cur.rowcount > 0
 
 
-def move_card(conn: sqlite3.Connection, board_id: int, card_id: str, target_column_id: str, position: int) -> bool:
+def move_card(conn: sqlite3.Connection, board_id: int, card_id: str, target_column_id: str, position: int, commit: bool = True) -> bool:
     # Verify card and target column belong to this board
     card = conn.execute(
         """SELECT c.id, c.column_id FROM cards c
@@ -213,7 +217,8 @@ def move_card(conn: sqlite3.Connection, board_id: int, card_id: str, target_colu
         "UPDATE cards SET column_id = ?, position = ? WHERE id = ?",
         (target_column_id, position, card_id),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return True
 
 

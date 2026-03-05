@@ -77,14 +77,17 @@ describe("KanbanBoard", () => {
     expect(mockAuth.logout).toHaveBeenCalled();
   });
 
-  it("calls renameColumn API on column rename", async () => {
+  it("calls renameColumn API on column rename after debounce", async () => {
     render(<KanbanBoard />);
     await waitFor(() => expect(screen.getByText("Test card")).toBeInTheDocument());
     const column = screen.getAllByTestId(/column-/i)[0];
     const input = within(column).getByLabelText("Column title");
     await userEvent.clear(input);
     await userEvent.type(input, "New Name");
-    expect(apiModule.api.renameColumn).toHaveBeenCalled();
+    // API should not be called synchronously (debounced)
+    expect(apiModule.api.renameColumn).not.toHaveBeenCalled();
+    // Wait for the 400ms debounce to fire
+    await waitFor(() => expect(apiModule.api.renameColumn).toHaveBeenCalled(), { timeout: 1000 });
   });
 
   it("calls createCard API on add card", async () => {

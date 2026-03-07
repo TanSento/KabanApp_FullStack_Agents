@@ -12,7 +12,7 @@ const MOCK_BOARD: BoardData = {
     { id: "col-2", title: "Done", cardIds: [] },
   ],
   cards: {
-    "card-1": { id: "card-1", title: "Test card", details: "Details" },
+    "card-1": { id: "card-1", title: "Test card", details: "Details", due_date: null, priority: "none" as const },
   },
 };
 

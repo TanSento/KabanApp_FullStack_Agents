@@ -108,3 +108,7 @@ Conversation history is stored server-side in `_chat_history` dict keyed by sess
 - Color tokens defined as CSS custom properties in `frontend/src/app/globals.css` - use `var(--accent-yellow)`, `var(--primary-blue)`, `var(--secondary-purple)`, `var(--navy-dark)`, `var(--gray-text)`
 - All API routes prefixed with `/api/`
 - Auth via `Authorization: Bearer <token>` header; `require_auth` dependency in `main.py`
+
+## Detailed Plan
+
+@docs/PLAN.md

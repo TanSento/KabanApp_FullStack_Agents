@@ -12,25 +12,37 @@ from pydantic import BaseModel
 from app.ai import AINotConfiguredError, AIServiceError, chat, chat_with_board
 from app.auth import create_session, get_user, login, logout
 from app.db import (
+    add_comment,
     authenticate_user,
     bulk_update,
     create_board,
     create_card,
     create_column,
+    create_label,
     delete_board,
     delete_card,
     delete_column,
+    delete_comment,
+    delete_label,
     ensure_board,
     ensure_user,
     get_board,
+    get_board_stats,
     get_boards,
+    get_card_labels,
+    get_comments,
     get_connection,
+    get_labels,
     get_user_id,
     init_db,
     move_card,
     register_user,
+    remove_card_label,
     rename_board,
     rename_column,
+    reorder_columns,
+    search_cards,
+    set_card_label,
     update_card,
 )
 
@@ -62,16 +74,27 @@ class RenameColumnRequest(BaseModel):
     title: str
 
 
+VALID_PRIORITIES = {"none", "low", "medium", "high", "urgent"}
+
+
 class CreateCardRequest(BaseModel):
     column_id: str
     id: str
     title: str
     details: str = ""
+    due_date: str | None = None
+    priority: str = "none"
 
 
 class UpdateCardRequest(BaseModel):
     title: str
     details: str
+    due_date: str | None = None
+    priority: str = "none"
+
+
+class ReorderColumnsRequest(BaseModel):
+    column_ids: list[str]
 
 
 class MoveCardRequest(BaseModel):
@@ -82,6 +105,15 @@ class MoveCardRequest(BaseModel):
 class BulkUpdateRequest(BaseModel):
     columns: list[dict]
     cards: dict[str, dict]
+
+
+class AddCommentRequest(BaseModel):
+    body: str
+
+
+class CreateLabelRequest(BaseModel):
+    name: str
+    color: str = "#6366f1"
 
 
 class ChatRequest(BaseModel):
@@ -257,9 +289,9 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             try:
                 for action in result.board_updates:
                     if action.action == "create_card":
-                        create_card(conn, board_id, action.column_id, action.card_id, action.title, action.details or "", commit=False)
+                        create_card(conn, board_id, action.column_id, action.card_id, action.title, action.details or "", action.due_date, action.priority or "none", commit=False)
                     elif action.action == "edit_card":
-                        update_card(conn, board_id, action.card_id, action.title, action.details or "", commit=False)
+                        update_card(conn, board_id, action.card_id, action.title, action.details or "", action.due_date, action.priority or "none", commit=False)
                     elif action.action == "delete_card":
                         delete_card(conn, board_id, action.card_id, commit=False)
                     elif action.action == "move_card":
@@ -351,6 +383,17 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
         finally:
             conn.close()
 
+    # reorder must be registered before {column_id} routes to avoid capture
+    @application.put("/api/boards/{board_id}/columns/reorder")
+    async def api_reorder_columns(board_id: int, body: ReorderColumnsRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not reorder_columns(conn, bid, body.column_ids):
+                raise HTTPException(status_code=400, detail="Invalid column IDs for this board")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
     @application.put("/api/boards/{board_id}/columns/{column_id}")
     async def api_rename_column_by_board(board_id: int, column_id: str, body: RenameColumnRequest, username: str = Depends(require_auth)):
         conn, bid = _get_board_for_user(username, board_id)
@@ -386,9 +429,11 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     @application.post("/api/boards/{board_id}/cards")
     async def api_create_card_by_board(board_id: int, body: CreateCardRequest, username: str = Depends(require_auth)):
+        if body.priority not in VALID_PRIORITIES:
+            raise HTTPException(status_code=400, detail=f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
         conn, bid = _get_board_for_user(username, board_id)
         try:
-            if not create_card(conn, bid, body.column_id, body.id, body.title, body.details):
+            if not create_card(conn, bid, body.column_id, body.id, body.title, body.details, body.due_date, body.priority):
                 raise HTTPException(status_code=404, detail="Column not found")
             return {"status": "ok"}
         finally:
@@ -396,9 +441,11 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     @application.put("/api/boards/{board_id}/cards/{card_id}")
     async def api_update_card_by_board(board_id: int, card_id: str, body: UpdateCardRequest, username: str = Depends(require_auth)):
+        if body.priority not in VALID_PRIORITIES:
+            raise HTTPException(status_code=400, detail=f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
         conn, bid = _get_board_for_user(username, board_id)
         try:
-            if not update_card(conn, bid, card_id, body.title, body.details):
+            if not update_card(conn, bid, card_id, body.title, body.details, body.due_date, body.priority):
                 raise HTTPException(status_code=404, detail="Card not found")
             return {"status": "ok"}
         finally:
@@ -453,9 +500,9 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             try:
                 for action in result.board_updates:
                     if action.action == "create_card":
-                        create_card(conn, bid, action.column_id, action.card_id, action.title, action.details or "", commit=False)
+                        create_card(conn, bid, action.column_id, action.card_id, action.title, action.details or "", action.due_date, action.priority or "none", commit=False)
                     elif action.action == "edit_card":
-                        update_card(conn, bid, action.card_id, action.title, action.details or "", commit=False)
+                        update_card(conn, bid, action.card_id, action.title, action.details or "", action.due_date, action.priority or "none", commit=False)
                     elif action.action == "delete_card":
                         delete_card(conn, bid, action.card_id, commit=False)
                     elif action.action == "move_card":
@@ -473,6 +520,125 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             _chat_history[chat_key] = history
 
             return {"response": result.response, "board_updates": applied}
+        finally:
+            conn.close()
+
+    @application.get("/api/boards/{board_id}/stats")
+    async def api_board_stats(board_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            return get_board_stats(conn, bid)
+        finally:
+            conn.close()
+
+    @application.get("/api/boards/{board_id}/search")
+    async def api_search_cards(board_id: int, q: str = "", username: str = Depends(require_auth)):
+        if not q.strip():
+            return {"cards": []}
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            return {"cards": search_cards(conn, bid, q.strip())}
+        finally:
+            conn.close()
+
+    @application.get("/api/boards/{board_id}/cards/{card_id}/comments")
+    async def api_get_comments(board_id: int, card_id: str, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            comments = get_comments(conn, bid, card_id)
+            if comments is None:
+                raise HTTPException(status_code=404, detail="Card not found")
+            return {"comments": comments}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/cards/{card_id}/comments")
+    async def api_add_comment(board_id: int, card_id: str, body: AddCommentRequest, username: str = Depends(require_auth)):
+        if not body.body.strip():
+            raise HTTPException(status_code=400, detail="Comment body cannot be empty")
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            user_id = get_user_id(conn, username)
+            if user_id is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            comment = add_comment(conn, bid, card_id, user_id, body.body.strip())
+            if comment is None:
+                raise HTTPException(status_code=404, detail="Card not found")
+            return comment
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}/cards/{card_id}/comments/{comment_id}")
+    async def api_delete_comment(board_id: int, card_id: str, comment_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            user_id = get_user_id(conn, username)
+            if user_id is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            if not delete_comment(conn, bid, card_id, comment_id, user_id):
+                raise HTTPException(status_code=404, detail="Comment not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    # -- Label routes --
+
+    @application.get("/api/boards/{board_id}/labels")
+    async def api_get_labels(board_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            return {"labels": get_labels(conn, bid)}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/labels")
+    async def api_create_label(board_id: int, body: CreateLabelRequest, username: str = Depends(require_auth)):
+        if not body.name.strip():
+            raise HTTPException(status_code=400, detail="Label name cannot be empty")
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            return create_label(conn, bid, body.name.strip(), body.color)
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}/labels/{label_id}")
+    async def api_delete_label(board_id: int, label_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not delete_label(conn, bid, label_id):
+                raise HTTPException(status_code=404, detail="Label not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.get("/api/boards/{board_id}/cards/{card_id}/labels")
+    async def api_get_card_labels(board_id: int, card_id: str, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            labels = get_card_labels(conn, bid, card_id)
+            if labels is None:
+                raise HTTPException(status_code=404, detail="Card not found")
+            return {"labels": labels}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/cards/{card_id}/labels/{label_id}")
+    async def api_set_card_label(board_id: int, card_id: str, label_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not set_card_label(conn, bid, card_id, label_id):
+                raise HTTPException(status_code=404, detail="Card or label not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}/cards/{card_id}/labels/{label_id}")
+    async def api_remove_card_label(board_id: int, card_id: str, label_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not remove_card_label(conn, bid, card_id, label_id):
+                raise HTTPException(status_code=404, detail="Label not assigned to card")
+            return {"status": "ok"}
         finally:
             conn.close()
 
@@ -498,9 +664,11 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     @application.post("/api/board/cards")
     async def api_create_card(body: CreateCardRequest, username: str = Depends(require_auth)):
+        if body.priority not in VALID_PRIORITIES:
+            raise HTTPException(status_code=400, detail=f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
         conn, board_id = _get_board_id(username)
         try:
-            if not create_card(conn, board_id, body.column_id, body.id, body.title, body.details):
+            if not create_card(conn, board_id, body.column_id, body.id, body.title, body.details, body.due_date, body.priority):
                 raise HTTPException(status_code=404, detail="Column not found")
             return {"status": "ok"}
         finally:
@@ -508,9 +676,11 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     @application.put("/api/board/cards/{card_id}")
     async def api_update_card(card_id: str, body: UpdateCardRequest, username: str = Depends(require_auth)):
+        if body.priority not in VALID_PRIORITIES:
+            raise HTTPException(status_code=400, detail=f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}")
         conn, board_id = _get_board_id(username)
         try:
-            if not update_card(conn, board_id, card_id, body.title, body.details):
+            if not update_card(conn, board_id, card_id, body.title, body.details, body.due_date, body.priority):
                 raise HTTPException(status_code=404, detail="Card not found")
             return {"status": "ok"}
         finally:

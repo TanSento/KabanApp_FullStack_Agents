@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
+import type { Priority } from "@/lib/kanban";
 
-const initialFormState = { title: "", details: "" };
+const initialFormState = { title: "", details: "", due_date: "", priority: "none" as Priority };
 
 type NewCardFormProps = {
-  onAdd: (title: string, details: string) => void;
+  onAdd: (title: string, details: string, due_date: string | null, priority: Priority) => void;
 };
 
 export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
@@ -15,7 +16,12 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
     if (!formState.title.trim()) {
       return;
     }
-    onAdd(formState.title.trim(), formState.details.trim());
+    onAdd(
+      formState.title.trim(),
+      formState.details.trim(),
+      formState.due_date || null,
+      formState.priority,
+    );
     setFormState(initialFormState);
     setIsOpen(false);
   };
@@ -42,6 +48,29 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
             rows={3}
             className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
           />
+          <div className="flex gap-2">
+            <select
+              value={formState.priority}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, priority: event.target.value as Priority }))
+              }
+              className="flex-1 rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
+            >
+              <option value="none">No priority</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+            <input
+              type="date"
+              value={formState.due_date}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, due_date: event.target.value }))
+              }
+              className="flex-1 rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="submit"

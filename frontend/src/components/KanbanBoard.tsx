@@ -17,7 +17,10 @@ import { useAuth } from "@/components/AuthContext";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { AiChatSidebar } from "@/components/AiChatSidebar";
-import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { CardDetailModal } from "@/components/CardDetailModal";
+import { BoardFilterBar, DEFAULT_FILTERS, type BoardFilters } from "@/components/BoardFilterBar";
+import { BoardStats } from "@/components/BoardStats";
+import { createId, moveCard, type BoardData, type Priority, type Card } from "@/lib/kanban";
 import { api, type BoardMeta } from "@/lib/api";
 
 export const KanbanBoard = () => {
@@ -34,6 +37,9 @@ export const KanbanBoard = () => {
   const [renameBoardTitle, setRenameBoardTitle] = useState("");
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [showNewColumnInput, setShowNewColumnInput] = useState(false);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [filters, setFilters] = useState<BoardFilters>(DEFAULT_FILTERS);
+  const [statsVersion, setStatsVersion] = useState(0);
   const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
@@ -88,6 +94,35 @@ export const KanbanBoard = () => {
 
   const cardsById = useMemo(() => board?.cards ?? {}, [board?.cards]);
 
+  const matchesFilters = useCallback((card: Card): boolean => {
+    const { search, priority, dueFilter } = filters;
+    if (search && !card.title.toLowerCase().includes(search.toLowerCase()) &&
+        !card.details.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
+    if (priority !== "all" && card.priority !== priority) {
+      return false;
+    }
+    if (dueFilter !== "all") {
+      if (!card.due_date) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(card.due_date);
+      if (dueFilter === "overdue" && due >= today) return false;
+      if (dueFilter === "due-today") {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (due < today || due >= tomorrow) return false;
+      }
+      if (dueFilter === "due-week") {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        if (due < today || due >= weekEnd) return false;
+      }
+    }
+    return true;
+  }, [filters]);
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
   };
@@ -137,16 +172,16 @@ export const KanbanBoard = () => {
     }, 400);
   };
 
-  const handleAddCard = (columnId: string, title: string, details: string) => {
+  const handleAddCard = (columnId: string, title: string, details: string, due_date: string | null = null, priority: Priority = "none") => {
     if (!token || !board || activeBoardId === null) return;
     const id = createId("card");
-    const cardDetails = details || "No details yet.";
+    const cardDetails = details || "";
 
     setBoard((prev) =>
       prev
         ? {
           ...prev,
-          cards: { ...prev.cards, [id]: { id, title, details: cardDetails } },
+          cards: { ...prev.cards, [id]: { id, title, details: cardDetails, due_date, priority } },
           columns: prev.columns.map((col) =>
             col.id === columnId
               ? { ...col, cardIds: [...col.cardIds, id] }
@@ -156,8 +191,9 @@ export const KanbanBoard = () => {
         : prev
     );
 
+    setStatsVersion((v) => v + 1);
     api
-      .createCardOnBoard(token, activeBoardId, columnId, id, title, cardDetails)
+      .createCardOnBoard(token, activeBoardId, columnId, id, title, cardDetails, due_date, priority)
       .catch(() => fetchBoard());
   };
 
@@ -180,7 +216,19 @@ export const KanbanBoard = () => {
         : prev
     );
 
+    setStatsVersion((v) => v + 1);
     api.deleteCardOnBoard(token, activeBoardId, cardId).catch(() => fetchBoard());
+  };
+
+  const handleSaveCard = (cardId: string, title: string, details: string, due_date: string | null, priority: Priority) => {
+    if (!token || activeBoardId === null) return;
+    setBoard((prev) =>
+      prev
+        ? { ...prev, cards: { ...prev.cards, [cardId]: { ...prev.cards[cardId], title, details, due_date, priority } } }
+        : prev
+    );
+    setStatsVersion((v) => v + 1);
+    api.updateCardOnBoard(token, activeBoardId, cardId, title, details, due_date, priority).catch(() => fetchBoard());
   };
 
   const handleAddColumn = async () => {
@@ -420,6 +468,14 @@ export const KanbanBoard = () => {
               ))}
             </div>
           )}
+
+          {board && token && activeBoardId !== null && (
+            <BoardStats token={token} boardId={activeBoardId} refreshKey={statsVersion} />
+          )}
+
+          {board && (
+            <BoardFilterBar filters={filters} onChange={setFilters} />
+          )}
         </header>
 
         {loading ? (
@@ -434,17 +490,28 @@ export const KanbanBoard = () => {
             onDragEnd={handleDragEnd}
           >
             <section className="grid gap-6" style={{ gridTemplateColumns: `repeat(${board.columns.length}, minmax(0, 1fr))` }}>
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                  onRename={handleRenameColumn}
-                  onAddCard={handleAddCard}
-                  onDeleteCard={handleDeleteCard}
-                  onDeleteColumn={handleDeleteColumn}
-                />
-              ))}
+              {board.columns.map((column) => {
+                const allCards = column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean);
+                const hasActiveFilter = filters.search !== "" || filters.priority !== "all" || filters.dueFilter !== "all";
+                const filteredCardIds = hasActiveFilter
+                  ? column.cardIds.filter((cardId) => board.cards[cardId] && matchesFilters(board.cards[cardId]))
+                  : column.cardIds;
+                const filteredCards = hasActiveFilter
+                  ? allCards.filter(matchesFilters)
+                  : allCards;
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    column={{ ...column, cardIds: filteredCardIds }}
+                    cards={filteredCards}
+                    onRename={handleRenameColumn}
+                    onAddCard={handleAddCard}
+                    onDeleteCard={handleDeleteCard}
+                    onDeleteColumn={handleDeleteColumn}
+                    onEditCard={(cardId) => setEditingCard(board.cards[cardId])}
+                  />
+                );
+              })}
 
               {/* Add column */}
               <div className="flex flex-col gap-3">
@@ -500,6 +567,16 @@ export const KanbanBoard = () => {
             token={token}
             boardId={activeBoardId}
             onBoardUpdate={fetchBoard}
+          />
+        )}
+
+        {editingCard && token && activeBoardId !== null && (
+          <CardDetailModal
+            card={editingCard}
+            token={token}
+            boardId={activeBoardId}
+            onSave={handleSaveCard}
+            onClose={() => setEditingCard(null)}
           />
         )}
       </main>

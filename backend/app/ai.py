@@ -39,6 +39,8 @@ class BoardAction(BaseModel):
     title: str | None = None
     details: str | None = None
     position: int | None = None
+    due_date: str | None = None
+    priority: str | None = None
 
 
 class AIResponse(BaseModel):

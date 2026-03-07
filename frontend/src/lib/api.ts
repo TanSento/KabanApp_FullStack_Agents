@@ -125,11 +125,13 @@ export const api = {
         columnId: string,
         id: string,
         title: string,
-        details: string
+        details: string,
+        due_date: string | null = null,
+        priority: string = "none"
     ) =>
         request("/boards/" + boardId + "/cards", token, {
             method: "POST",
-            body: JSON.stringify({ column_id: columnId, id, title, details }),
+            body: JSON.stringify({ column_id: columnId, id, title, details, due_date, priority }),
         }),
 
     updateCardOnBoard: (
@@ -137,11 +139,13 @@ export const api = {
         boardId: number,
         cardId: string,
         title: string,
-        details: string
+        details: string,
+        due_date: string | null = null,
+        priority: string = "none"
     ) =>
         request("/boards/" + boardId + "/cards/" + cardId, token, {
             method: "PUT",
-            body: JSON.stringify({ title, details }),
+            body: JSON.stringify({ title, details, due_date, priority }),
         }),
 
     deleteCardOnBoard: (token: string, boardId: number, cardId: string) =>
@@ -165,5 +169,64 @@ export const api = {
         request<ChatResponse>("/boards/" + boardId + "/ai/chat", token, {
             method: "POST",
             body: JSON.stringify({ message }),
+        }),
+
+    getBoardStats: (token: string, boardId: number) =>
+        request<{ total: number; by_priority: Record<string, number>; overdue: number }>(
+            "/boards/" + boardId + "/stats", token
+        ),
+
+    searchCards: (token: string, boardId: number, q: string) =>
+        request<{ cards: Array<{ id: string; title: string; details: string; column_id: string; due_date: string | null; priority: string }> }>(
+            "/boards/" + boardId + "/search?q=" + encodeURIComponent(q), token
+        ),
+
+    getComments: (token: string, boardId: number, cardId: string) =>
+        request<{ comments: Array<{ id: number; body: string; created_at: string; username: string }> }>(
+            "/boards/" + boardId + "/cards/" + cardId + "/comments", token
+        ),
+
+    addComment: (token: string, boardId: number, cardId: string, body: string) =>
+        request<{ id: number; body: string; created_at: string; username: string }>(
+            "/boards/" + boardId + "/cards/" + cardId + "/comments", token, {
+                method: "POST",
+                body: JSON.stringify({ body }),
+            }
+        ),
+
+    deleteComment: (token: string, boardId: number, cardId: string, commentId: number) =>
+        request("/boards/" + boardId + "/cards/" + cardId + "/comments/" + commentId, token, {
+            method: "DELETE",
+        }),
+
+    getLabels: (token: string, boardId: number) =>
+        request<{ labels: Array<{ id: number; name: string; color: string }> }>(
+            "/boards/" + boardId + "/labels", token
+        ),
+
+    createLabel: (token: string, boardId: number, name: string, color: string) =>
+        request<{ id: number; name: string; color: string }>(
+            "/boards/" + boardId + "/labels", token, {
+                method: "POST",
+                body: JSON.stringify({ name, color }),
+            }
+        ),
+
+    deleteLabel: (token: string, boardId: number, labelId: number) =>
+        request("/boards/" + boardId + "/labels/" + labelId, token, { method: "DELETE" }),
+
+    getCardLabels: (token: string, boardId: number, cardId: string) =>
+        request<{ labels: Array<{ id: number; name: string; color: string }> }>(
+            "/boards/" + boardId + "/cards/" + cardId + "/labels", token
+        ),
+
+    setCardLabel: (token: string, boardId: number, cardId: string, labelId: number) =>
+        request("/boards/" + boardId + "/cards/" + cardId + "/labels/" + labelId, token, {
+            method: "POST",
+        }),
+
+    removeCardLabel: (token: string, boardId: number, cardId: string, labelId: number) =>
+        request("/boards/" + boardId + "/cards/" + cardId + "/labels/" + labelId, token, {
+            method: "DELETE",
         }),
 };

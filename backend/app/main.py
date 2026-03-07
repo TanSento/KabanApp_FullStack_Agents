@@ -10,17 +10,26 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.ai import AINotConfiguredError, AIServiceError, chat, chat_with_board
-from app.auth import get_user, login, logout
+from app.auth import create_session, get_user, login, logout
 from app.db import (
+    authenticate_user,
     bulk_update,
+    create_board,
     create_card,
+    create_column,
+    delete_board,
     delete_card,
+    delete_column,
     ensure_board,
     ensure_user,
     get_board,
+    get_boards,
     get_connection,
+    get_user_id,
     init_db,
     move_card,
+    register_user,
+    rename_board,
     rename_column,
     update_card,
 )
@@ -31,6 +40,11 @@ DEFAULT_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 # -- Pydantic models --
 
 class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
     username: str
     password: str
 
@@ -72,6 +86,18 @@ class BulkUpdateRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+
+
+class CreateBoardRequest(BaseModel):
+    title: str
+
+
+class RenameBoardRequest(BaseModel):
+    title: str
+
+
+class CreateColumnRequest(BaseModel):
+    title: str
 
 
 # -- Auth dependency --
@@ -116,9 +142,24 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     def _get_board_id(username: str) -> tuple:
         conn = get_connection(db_path)
-        init_db(conn)  # idempotent -- ensures tables exist
+        init_db(conn)
         user_id = ensure_user(conn, username, "password")
         board_id = ensure_board(conn, user_id)
+        return conn, board_id
+
+    def _get_board_for_user(username: str, board_id: int) -> tuple:
+        """Get connection and verify the board belongs to the user."""
+        conn = get_connection(db_path)
+        init_db(conn)
+        user_id = get_user_id(conn, username)
+        if user_id is None:
+            user_id = ensure_user(conn, username, "password")
+        board = conn.execute(
+            "SELECT id FROM boards WHERE id = ? AND user_id = ?", (board_id, user_id)
+        ).fetchone()
+        if not board:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Board not found")
         return conn, board_id
 
     # -- Health --
@@ -131,9 +172,39 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
 
     @application.post("/api/auth/login")
     async def auth_login(body: LoginRequest) -> LoginResponse:
+        # Check DB first (handles registered users)
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = authenticate_user(conn, body.username, body.password)
+        finally:
+            conn.close()
+
+        if user_id is not None:
+            token = create_session(body.username)
+            return LoginResponse(token=token, username=body.username)
+
+        # Fall back to hardcoded credentials
         token = login(body.username, body.password)
         if token is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        return LoginResponse(token=token, username=body.username)
+
+    @application.post("/api/auth/register")
+    async def auth_register(body: RegisterRequest) -> LoginResponse:
+        if len(body.username) < 3:
+            raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+        if len(body.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = register_user(conn, body.username, body.password)
+            if user_id is None:
+                raise HTTPException(status_code=409, detail="Username already taken")
+        finally:
+            conn.close()
+        token = create_session(body.username)
         return LoginResponse(token=token, username=body.username)
 
     @application.post("/api/auth/logout")
@@ -146,10 +217,10 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
         return {"status": "ok"}
 
     @application.get("/api/auth/me")
-    async def auth_me(username: str = Header(alias="authorization", default="")) -> UserResponse:
-        if not username.startswith("Bearer "):
+    async def auth_me(authorization: str = Header(default="")) -> UserResponse:
+        if not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header")
-        token = username.removeprefix("Bearer ")
+        token = authorization.removeprefix("Bearer ")
         user = get_user(token)
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -182,7 +253,6 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
             except AIServiceError as exc:
                 raise HTTPException(status_code=502, detail=str(exc))
 
-            # Apply board updates atomically — commit once after all actions succeed
             applied = []
             try:
                 for action in result.board_updates:
@@ -202,7 +272,6 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
                 conn.rollback()
                 raise
 
-            # Update conversation history
             history.append({"role": "user", "content": body.message})
             history.append({"role": "assistant", "content": result.response})
             _chat_history[token] = history
@@ -211,7 +280,203 @@ def create_app(static_dir: Path | None = None, db_path: Path | None = None) -> F
         finally:
             conn.close()
 
-    # -- Board CRUD --
+    # -- Multi-board management --
+
+    @application.get("/api/boards")
+    async def api_list_boards(username: str = Depends(require_auth)):
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = ensure_user(conn, username, "password")
+            ensure_board(conn, user_id)  # ensure at least one board exists
+            boards = get_boards(conn, user_id)
+            return {"boards": boards}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards")
+    async def api_create_board(body: CreateBoardRequest, username: str = Depends(require_auth)):
+        if not body.title.strip():
+            raise HTTPException(status_code=400, detail="Board title cannot be empty")
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = ensure_user(conn, username, "password")
+            ensure_board(conn, user_id)  # ensure default board exists
+            board_id = create_board(conn, user_id, body.title.strip())
+            return {"id": board_id, "title": body.title.strip()}
+        finally:
+            conn.close()
+
+    @application.patch("/api/boards/{board_id}")
+    async def api_rename_board(board_id: int, body: RenameBoardRequest, username: str = Depends(require_auth)):
+        if not body.title.strip():
+            raise HTTPException(status_code=400, detail="Board title cannot be empty")
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = ensure_user(conn, username, "password")
+            if not rename_board(conn, board_id, user_id, body.title.strip()):
+                raise HTTPException(status_code=404, detail="Board not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}")
+    async def api_delete_board(board_id: int, username: str = Depends(require_auth)):
+        conn = get_connection(db_path)
+        try:
+            init_db(conn)
+            user_id = ensure_user(conn, username, "password")
+            # Check ownership first
+            board = conn.execute(
+                "SELECT id FROM boards WHERE id = ? AND user_id = ?", (board_id, user_id)
+            ).fetchone()
+            if not board:
+                raise HTTPException(status_code=404, detail="Board not found")
+            # Don't allow deleting the last board
+            boards = get_boards(conn, user_id)
+            if len(boards) <= 1:
+                raise HTTPException(status_code=400, detail="Cannot delete the last board")
+            delete_board(conn, board_id, user_id)
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.get("/api/boards/{board_id}")
+    async def api_get_board_by_id(board_id: int, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            return get_board(conn, bid)
+        finally:
+            conn.close()
+
+    @application.put("/api/boards/{board_id}/columns/{column_id}")
+    async def api_rename_column_by_board(board_id: int, column_id: str, body: RenameColumnRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not rename_column(conn, bid, column_id, body.title):
+                raise HTTPException(status_code=404, detail="Column not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/columns")
+    async def api_create_column(board_id: int, body: CreateColumnRequest, username: str = Depends(require_auth)):
+        if not body.title.strip():
+            raise HTTPException(status_code=400, detail="Column title cannot be empty")
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            col_id = create_column(conn, bid, body.title.strip())
+            if col_id is None:
+                raise HTTPException(status_code=404, detail="Board not found")
+            return {"id": col_id, "title": body.title.strip()}
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}/columns/{column_id}")
+    async def api_delete_column(board_id: int, column_id: str, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not delete_column(conn, bid, column_id):
+                raise HTTPException(status_code=404, detail="Column not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/cards")
+    async def api_create_card_by_board(board_id: int, body: CreateCardRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not create_card(conn, bid, body.column_id, body.id, body.title, body.details):
+                raise HTTPException(status_code=404, detail="Column not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.put("/api/boards/{board_id}/cards/{card_id}")
+    async def api_update_card_by_board(board_id: int, card_id: str, body: UpdateCardRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not update_card(conn, bid, card_id, body.title, body.details):
+                raise HTTPException(status_code=404, detail="Card not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.delete("/api/boards/{board_id}/cards/{card_id}")
+    async def api_delete_card_by_board(board_id: int, card_id: str, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not delete_card(conn, bid, card_id):
+                raise HTTPException(status_code=404, detail="Card not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.put("/api/boards/{board_id}/cards/{card_id}/move")
+    async def api_move_card_by_board(board_id: int, card_id: str, body: MoveCardRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            if not move_card(conn, bid, card_id, body.column_id, body.position):
+                raise HTTPException(status_code=404, detail="Card or column not found")
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.put("/api/boards/{board_id}/bulk")
+    async def api_bulk_update_by_board(board_id: int, body: BulkUpdateRequest, username: str = Depends(require_auth)):
+        conn, bid = _get_board_for_user(username, board_id)
+        try:
+            bulk_update(conn, bid, body.model_dump())
+            return {"status": "ok"}
+        finally:
+            conn.close()
+
+    @application.post("/api/boards/{board_id}/ai/chat")
+    async def ai_chat_by_board(board_id: int, body: ChatRequest, auth: tuple[str, str] = Depends(require_auth_with_token)):
+        username, token = auth
+        conn, bid = _get_board_for_user(username, board_id)
+        chat_key = f"{token}:{bid}"
+        try:
+            board_state = get_board(conn, bid)
+            history = _chat_history.get(chat_key, [])
+
+            try:
+                result = chat_with_board(board_state, body.message, history)
+            except AINotConfiguredError:
+                raise HTTPException(status_code=503, detail="AI service not configured")
+            except AIServiceError as exc:
+                raise HTTPException(status_code=502, detail=str(exc))
+
+            applied = []
+            try:
+                for action in result.board_updates:
+                    if action.action == "create_card":
+                        create_card(conn, bid, action.column_id, action.card_id, action.title, action.details or "", commit=False)
+                    elif action.action == "edit_card":
+                        update_card(conn, bid, action.card_id, action.title, action.details or "", commit=False)
+                    elif action.action == "delete_card":
+                        delete_card(conn, bid, action.card_id, commit=False)
+                    elif action.action == "move_card":
+                        move_card(conn, bid, action.card_id, action.column_id, action.position, commit=False)
+                    elif action.action == "rename_column":
+                        rename_column(conn, bid, action.column_id, action.title, commit=False)
+                    applied.append(action.model_dump(exclude_none=True))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+            history.append({"role": "user", "content": body.message})
+            history.append({"role": "assistant", "content": result.response})
+            _chat_history[chat_key] = history
+
+            return {"response": result.response, "board_updates": applied}
+        finally:
+            conn.close()
+
+    # -- Legacy single-board routes (keep for backward compat) --
 
     @application.get("/api/board")
     async def api_get_board(username: str = Depends(require_auth)):

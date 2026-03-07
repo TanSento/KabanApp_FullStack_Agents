@@ -27,7 +27,14 @@ export type ChatResponse = {
     board_updates: Record<string, unknown>[];
 };
 
+export type BoardMeta = {
+    id: number;
+    title: string;
+};
+
 export const api = {
+    // -- Legacy single-board routes (used for default board) --
+
     getBoard: (token: string) => request<BoardData>("/board", token),
 
     chatWithAi: (token: string, message: string) =>
@@ -66,5 +73,97 @@ export const api = {
         request("/board/cards/" + cardId + "/move", token, {
             method: "PUT",
             body: JSON.stringify({ column_id: columnId, position }),
+        }),
+
+    // -- Multi-board management --
+
+    listBoards: (token: string) =>
+        request<{ boards: BoardMeta[] }>("/boards", token),
+
+    createBoard: (token: string, title: string) =>
+        request<BoardMeta>("/boards", token, {
+            method: "POST",
+            body: JSON.stringify({ title }),
+        }),
+
+    renameBoard: (token: string, boardId: number, title: string) =>
+        request("/boards/" + boardId, token, {
+            method: "PATCH",
+            body: JSON.stringify({ title }),
+        }),
+
+    deleteBoard: (token: string, boardId: number) =>
+        request("/boards/" + boardId, token, { method: "DELETE" }),
+
+    getBoardById: (token: string, boardId: number) =>
+        request<BoardData>("/boards/" + boardId, token),
+
+    // -- Board-specific column management --
+
+    createColumn: (token: string, boardId: number, title: string) =>
+        request<{ id: string; title: string }>("/boards/" + boardId + "/columns", token, {
+            method: "POST",
+            body: JSON.stringify({ title }),
+        }),
+
+    deleteColumn: (token: string, boardId: number, columnId: string) =>
+        request("/boards/" + boardId + "/columns/" + columnId, token, {
+            method: "DELETE",
+        }),
+
+    // -- Board-specific card operations --
+
+    renameColumnOnBoard: (token: string, boardId: number, columnId: string, title: string) =>
+        request("/boards/" + boardId + "/columns/" + columnId, token, {
+            method: "PUT",
+            body: JSON.stringify({ title }),
+        }),
+
+    createCardOnBoard: (
+        token: string,
+        boardId: number,
+        columnId: string,
+        id: string,
+        title: string,
+        details: string
+    ) =>
+        request("/boards/" + boardId + "/cards", token, {
+            method: "POST",
+            body: JSON.stringify({ column_id: columnId, id, title, details }),
+        }),
+
+    updateCardOnBoard: (
+        token: string,
+        boardId: number,
+        cardId: string,
+        title: string,
+        details: string
+    ) =>
+        request("/boards/" + boardId + "/cards/" + cardId, token, {
+            method: "PUT",
+            body: JSON.stringify({ title, details }),
+        }),
+
+    deleteCardOnBoard: (token: string, boardId: number, cardId: string) =>
+        request("/boards/" + boardId + "/cards/" + cardId, token, {
+            method: "DELETE",
+        }),
+
+    moveCardOnBoard: (
+        token: string,
+        boardId: number,
+        cardId: string,
+        columnId: string,
+        position: number
+    ) =>
+        request("/boards/" + boardId + "/cards/" + cardId + "/move", token, {
+            method: "PUT",
+            body: JSON.stringify({ column_id: columnId, position }),
+        }),
+
+    chatWithAiOnBoard: (token: string, boardId: number, message: string) =>
+        request<ChatResponse>("/boards/" + boardId + "/ai/chat", token, {
+            method: "POST",
+            body: JSON.stringify({ message }),
         }),
 };

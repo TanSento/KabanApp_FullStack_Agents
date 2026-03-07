@@ -5,6 +5,7 @@ import { AiChatSidebar } from "@/components/AiChatSidebar";
 import * as apiModule from "@/lib/api";
 
 const TOKEN = "test-token";
+const BOARD_ID = 1;
 
 describe("AiChatSidebar", () => {
     let onBoardUpdate: ReturnType<typeof vi.fn>;
@@ -15,20 +16,20 @@ describe("AiChatSidebar", () => {
     });
 
     it("shows toggle button when closed", () => {
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         expect(screen.getByTestId("ai-chat-toggle")).toBeInTheDocument();
         expect(screen.queryByTestId("ai-chat-sidebar")).not.toBeInTheDocument();
     });
 
     it("opens sidebar when toggle is clicked", async () => {
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
         expect(screen.getByTestId("ai-chat-sidebar")).toBeInTheDocument();
         expect(screen.getByTestId("ai-chat-input")).toBeInTheDocument();
     });
 
     it("closes sidebar when close button is clicked", async () => {
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
         expect(screen.getByTestId("ai-chat-sidebar")).toBeInTheDocument();
         await userEvent.click(screen.getByTestId("ai-chat-close"));
@@ -37,12 +38,12 @@ describe("AiChatSidebar", () => {
     });
 
     it("sends a message and displays AI response", async () => {
-        vi.spyOn(apiModule.api, "chatWithAi").mockResolvedValue({
+        vi.spyOn(apiModule.api, "chatWithAiOnBoard").mockResolvedValue({
             response: "Hello! I can help.",
             board_updates: [],
         });
 
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
 
         const input = screen.getByTestId("ai-chat-input");
@@ -55,15 +56,16 @@ describe("AiChatSidebar", () => {
         });
 
         expect(onBoardUpdate).not.toHaveBeenCalled();
+        expect(apiModule.api.chatWithAiOnBoard).toHaveBeenCalledWith(TOKEN, BOARD_ID, "Hi there");
     });
 
     it("calls onBoardUpdate when AI returns board_updates", async () => {
-        vi.spyOn(apiModule.api, "chatWithAi").mockResolvedValue({
+        vi.spyOn(apiModule.api, "chatWithAiOnBoard").mockResolvedValue({
             response: "Done! Card created.",
             board_updates: [{ action: "create_card", column_id: "col-1", card_id: "card-new", title: "Test" }],
         });
 
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
 
         await userEvent.type(screen.getByTestId("ai-chat-input"), "Add a card");
@@ -78,11 +80,11 @@ describe("AiChatSidebar", () => {
 
     it("shows loading indicator while waiting for response", async () => {
         let resolvePromise: (value: apiModule.ChatResponse) => void;
-        vi.spyOn(apiModule.api, "chatWithAi").mockImplementation(
+        vi.spyOn(apiModule.api, "chatWithAiOnBoard").mockImplementation(
             () => new Promise((resolve) => { resolvePromise = resolve; })
         );
 
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
 
         await userEvent.type(screen.getByTestId("ai-chat-input"), "Hello");
@@ -101,9 +103,9 @@ describe("AiChatSidebar", () => {
     });
 
     it("shows error message on API failure", async () => {
-        vi.spyOn(apiModule.api, "chatWithAi").mockRejectedValue(new Error("Network error"));
+        vi.spyOn(apiModule.api, "chatWithAiOnBoard").mockRejectedValue(new Error("Network error"));
 
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
 
         await userEvent.type(screen.getByTestId("ai-chat-input"), "Hello");
@@ -115,12 +117,12 @@ describe("AiChatSidebar", () => {
     });
 
     it("submits on Enter key", async () => {
-        vi.spyOn(apiModule.api, "chatWithAi").mockResolvedValue({
+        vi.spyOn(apiModule.api, "chatWithAiOnBoard").mockResolvedValue({
             response: "Got it!",
             board_updates: [],
         });
 
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
 
         await userEvent.type(screen.getByTestId("ai-chat-input"), "Test{Enter}");
@@ -131,7 +133,7 @@ describe("AiChatSidebar", () => {
     });
 
     it("disables send button when input is empty", async () => {
-        render(<AiChatSidebar token={TOKEN} onBoardUpdate={onBoardUpdate} />);
+        render(<AiChatSidebar token={TOKEN} boardId={BOARD_ID} onBoardUpdate={onBoardUpdate} />);
         await userEvent.click(screen.getByTestId("ai-chat-toggle"));
         expect(screen.getByTestId("ai-chat-send")).toBeDisabled();
     });

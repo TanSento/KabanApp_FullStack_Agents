@@ -11,10 +11,11 @@ type Message = {
 
 type AiChatSidebarProps = {
     token: string;
+    boardId: number;
     onBoardUpdate: () => void;
 };
 
-export const AiChatSidebar = ({ token, onBoardUpdate }: AiChatSidebarProps) => {
+export const AiChatSidebar = ({ token, boardId, onBoardUpdate }: AiChatSidebarProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
@@ -37,7 +38,7 @@ export const AiChatSidebar = ({ token, onBoardUpdate }: AiChatSidebarProps) => {
         setIsLoading(true);
 
         try {
-            const data = await api.chatWithAi(token, text);
+            const data = await api.chatWithAiOnBoard(token, boardId, text);
             const aiMessage: Message = { role: "assistant", content: data.response };
             setMessages((prev) => [...prev, aiMessage]);
 
@@ -53,7 +54,7 @@ export const AiChatSidebar = ({ token, onBoardUpdate }: AiChatSidebarProps) => {
         } finally {
             setIsLoading(false);
         }
-    }, [input, isLoading, token, onBoardUpdate]);
+    }, [input, isLoading, token, boardId, onBoardUpdate]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {

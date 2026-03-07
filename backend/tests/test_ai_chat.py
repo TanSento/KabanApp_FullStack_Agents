@@ -32,10 +32,11 @@ def test_chat_response_only(auth_client):
     assert body["board_updates"] == []
 
 
-def test_chat_create_card(auth_client):
+def test_chat_create_card(auth_client, col_ids):
     """AI creates a card; verify it appears in the DB."""
+    backlog_id = col_ids["Backlog"]
     mock_resp = _mock_ai_response("Done!", [
-        {"action": "create_card", "column_id": "col-backlog", "card_id": "card-new1", "title": "Testing"},
+        {"action": "create_card", "column_id": backlog_id, "card_id": "card-new1", "title": "Testing"},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
@@ -44,60 +45,64 @@ def test_chat_create_card(auth_client):
     assert resp.status_code == 200
     assert len(resp.json()["board_updates"]) == 1
 
-    # Verify card exists in the board
     board = auth_client.get("/api/board").json()
     assert "card-new1" in board["cards"]
     assert board["cards"]["card-new1"]["title"] == "Testing"
 
 
-def test_chat_edit_card(auth_client):
+def test_chat_edit_card(auth_client, card_ids):
     """AI edits an existing card."""
+    card_id = card_ids["Align roadmap themes"]
     mock_resp = _mock_ai_response("Updated!", [
-        {"action": "edit_card", "card_id": "card-1", "title": "New Title", "details": "New details"},
+        {"action": "edit_card", "card_id": card_id, "title": "New Title", "details": "New details"},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
-        resp = auth_client.post("/api/ai/chat", json={"message": "Edit card-1"})
+        resp = auth_client.post("/api/ai/chat", json={"message": "Edit the card"})
 
     assert resp.status_code == 200
     board = auth_client.get("/api/board").json()
-    assert board["cards"]["card-1"]["title"] == "New Title"
-    assert board["cards"]["card-1"]["details"] == "New details"
+    assert board["cards"][card_id]["title"] == "New Title"
+    assert board["cards"][card_id]["details"] == "New details"
 
 
-def test_chat_delete_card(auth_client):
+def test_chat_delete_card(auth_client, card_ids):
     """AI deletes a card."""
+    card_id = card_ids["Align roadmap themes"]
     mock_resp = _mock_ai_response("Deleted!", [
-        {"action": "delete_card", "card_id": "card-1"},
+        {"action": "delete_card", "card_id": card_id},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
-        resp = auth_client.post("/api/ai/chat", json={"message": "Delete card-1"})
+        resp = auth_client.post("/api/ai/chat", json={"message": "Delete the card"})
 
     assert resp.status_code == 200
     board = auth_client.get("/api/board").json()
-    assert "card-1" not in board["cards"]
+    assert card_id not in board["cards"]
 
 
-def test_chat_move_card(auth_client):
+def test_chat_move_card(auth_client, card_ids, col_ids):
     """AI moves a card to a different column."""
+    card_id = card_ids["Align roadmap themes"]
+    done_id = col_ids["Done"]
     mock_resp = _mock_ai_response("Moved!", [
-        {"action": "move_card", "card_id": "card-1", "column_id": "col-done", "position": 0},
+        {"action": "move_card", "card_id": card_id, "column_id": done_id, "position": 0},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
-        resp = auth_client.post("/api/ai/chat", json={"message": "Move card-1 to Done"})
+        resp = auth_client.post("/api/ai/chat", json={"message": "Move card to Done"})
 
     assert resp.status_code == 200
     board = auth_client.get("/api/board").json()
-    done_col = next(c for c in board["columns"] if c["id"] == "col-done")
-    assert "card-1" in done_col["cardIds"]
+    done_col = next(c for c in board["columns"] if c["id"] == done_id)
+    assert card_id in done_col["cardIds"]
 
 
-def test_chat_rename_column(auth_client):
+def test_chat_rename_column(auth_client, col_ids):
     """AI renames a column."""
+    backlog_id = col_ids["Backlog"]
     mock_resp = _mock_ai_response("Renamed!", [
-        {"action": "rename_column", "column_id": "col-backlog", "title": "To Do"},
+        {"action": "rename_column", "column_id": backlog_id, "title": "To Do"},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
@@ -105,15 +110,17 @@ def test_chat_rename_column(auth_client):
 
     assert resp.status_code == 200
     board = auth_client.get("/api/board").json()
-    backlog = next(c for c in board["columns"] if c["id"] == "col-backlog")
+    backlog = next(c for c in board["columns"] if c["id"] == backlog_id)
     assert backlog["title"] == "To Do"
 
 
-def test_chat_multiple_updates(auth_client):
+def test_chat_multiple_updates(auth_client, col_ids):
     """AI returns several actions in one response."""
+    backlog_id = col_ids["Backlog"]
+    done_id = col_ids["Done"]
     mock_resp = _mock_ai_response("Done both!", [
-        {"action": "create_card", "column_id": "col-backlog", "card_id": "card-multi1", "title": "Card A"},
-        {"action": "rename_column", "column_id": "col-done", "title": "Completed"},
+        {"action": "create_card", "column_id": backlog_id, "card_id": "card-multi1", "title": "Card A"},
+        {"action": "rename_column", "column_id": done_id, "title": "Completed"},
     ])
     with patch("app.ai._get_client") as mock_get:
         mock_get.return_value.chat.completions.create.return_value = mock_resp
@@ -124,7 +131,7 @@ def test_chat_multiple_updates(auth_client):
 
     board = auth_client.get("/api/board").json()
     assert "card-multi1" in board["cards"]
-    done_col = next(c for c in board["columns"] if c["id"] == "col-done")
+    done_col = next(c for c in board["columns"] if c["id"] == done_id)
     assert done_col["title"] == "Completed"
 
 

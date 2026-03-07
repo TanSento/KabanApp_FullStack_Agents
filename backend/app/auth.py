@@ -7,12 +7,17 @@ VALID_PASSWORD = "password"
 _sessions: dict[str, str] = {}
 
 
+def create_session(username: str) -> str:
+    """Create a new session for any username. Returns the token."""
+    token = uuid.uuid4().hex
+    _sessions[token] = username
+    return token
+
+
 def login(username: str, password: str) -> str | None:
-    """Validate credentials and return a session token, or None on failure."""
+    """Validate hardcoded credentials and return a session token, or None on failure."""
     if username == VALID_USERNAME and password == VALID_PASSWORD:
-        token = uuid.uuid4().hex
-        _sessions[token] = username
-        return token
+        return create_session(username)
     return None
 
 

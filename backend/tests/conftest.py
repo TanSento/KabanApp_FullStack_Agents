@@ -25,3 +25,21 @@ def auth_client(client):
     token = resp.json()["token"]
     client.headers["Authorization"] = f"Bearer {token}"
     return client
+
+
+@pytest.fixture
+def board_data(auth_client):
+    """Return the initial board data for the authenticated user."""
+    return auth_client.get("/api/board").json()
+
+
+@pytest.fixture
+def col_ids(board_data):
+    """Map of column title -> column id."""
+    return {col["title"]: col["id"] for col in board_data["columns"]}
+
+
+@pytest.fixture
+def card_ids(board_data):
+    """Map of card title -> card id."""
+    return {card["title"]: card_id for card_id, card in board_data["cards"].items()}

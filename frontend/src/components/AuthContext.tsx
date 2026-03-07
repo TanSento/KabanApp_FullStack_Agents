@@ -8,6 +8,7 @@ type AuthState = {
     isLoading: boolean;
     error: string | null;
     login: (username: string, password: string) => Promise<boolean>;
+    register: (username: string, password: string) => Promise<boolean>;
     logout: () => Promise<void>;
 };
 
@@ -68,6 +69,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
+    const register = useCallback(async (user: string, pass: string) => {
+        setError(null);
+        try {
+            const res = await fetch("/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: user, password: pass }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                setError(data.detail || "Registration failed");
+                return false;
+            }
+            const data = await res.json();
+            sessionStorage.setItem(TOKEN_KEY, data.token);
+            setToken(data.token);
+            setUsername(data.username);
+            return true;
+        } catch {
+            setError("Unable to connect to server");
+            return false;
+        }
+    }, []);
+
     const logout = useCallback(async () => {
         if (token) {
             await fetch("/api/auth/logout", {
@@ -81,7 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, [token]);
 
     return (
-        <AuthContext value={{ token, username, isLoading, error, login, logout }}>
+        <AuthContext value={{ token, username, isLoading, error, login, register, logout }}>
             {children}
         </AuthContext>
     );

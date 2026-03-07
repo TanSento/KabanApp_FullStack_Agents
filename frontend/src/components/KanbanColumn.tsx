@@ -11,6 +11,7 @@ type KanbanColumnProps = {
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
+  onDeleteColumn?: (columnId: string) => void;
 };
 
 export const KanbanColumn = ({
@@ -19,6 +20,7 @@ export const KanbanColumn = ({
   onRename,
   onAddCard,
   onDeleteCard,
+  onDeleteColumn,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -32,11 +34,26 @@ export const KanbanColumn = ({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="w-full">
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
-            </span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+                {cards.length} cards
+              </span>
+            </div>
+            {onDeleteColumn && (
+              <button
+                type="button"
+                onClick={() => onDeleteColumn(column.id)}
+                className="rounded-full p-1 text-[var(--gray-text)] transition hover:text-red-500"
+                title="Delete column"
+                data-testid={`delete-column-${column.id}`}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M2 2l10 10M12 2L2 12" />
+                </svg>
+              </button>
+            )}
           </div>
           <input
             value={column.title}

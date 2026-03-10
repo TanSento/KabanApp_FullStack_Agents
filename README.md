@@ -34,6 +34,31 @@ A minimal Project Management MVP web application featuring a fast Next.js fronte
    - Linux: `./scripts/stop_linux.sh`
    - Windows: `.\scripts\start_windows.ps1`
 
+## Database Inspection
+
+To inspect the database while the app is running:
+
+```bash
+# List all users and passwords
+docker exec pm_antigravity-app-1 python3 -c "
+import sqlite3
+c = sqlite3.connect('/app/data/kanban.db')
+rows = c.execute('SELECT id, username, password FROM users').fetchall()
+print(f'{len(rows)} users:')
+for r in rows:
+    print(f'  {r[0]}: {r[1]} -> {r[2]}')
+"
+
+# Count users only
+docker exec pm_antigravity-app-1 python3 -c "
+import sqlite3
+c = sqlite3.connect('/app/data/kanban.db')
+print(c.execute('SELECT COUNT(*) FROM users').fetchone()[0], 'users')
+"
+```
+
+Note: passwords are stored as plain text for the default `user` account and SHA-256 hashed for registered users.
+
 ## Project Structure
 
 - `frontend/`: The Next.js frontend codebase, compiled to static files during Docker build.

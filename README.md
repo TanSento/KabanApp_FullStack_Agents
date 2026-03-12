@@ -32,7 +32,7 @@ A minimal Project Management MVP web application featuring a fast Next.js fronte
 4. To stop the application:
    - Mac: `./scripts/stop_mac.sh`
    - Linux: `./scripts/stop_linux.sh`
-   - Windows: `.\scripts\start_windows.ps1`
+   - Windows: `.\scripts\stop_windows.ps1`
 
 ## Database Inspection
 
